@@ -161,7 +161,7 @@ def save_html_animation(
 </head>
 <body>
   <h1>Dynamic GridWorld (8x8) — Proceso de Entrenamiento Q-Learning</h1>
-  <div class="subtitle">Visualización interactiva de episodios de entrenamiento, sensores locales y curvas de convergencia</div>
+  <div class="subtitle">Visualización interactiva de episodios de entrenamiento y curvas de convergencia</div>
 
   <div class="layout">
     <div class="card">
@@ -170,7 +170,6 @@ def save_html_animation(
         <span><i class="dot" style="background:#38bdf8"></i>Agente (▲▶▼◀)</span>
         <span><i class="dot" style="background:#ef4444"></i>Obstáculo móvil (5)</span>
         <span><i class="dot" style="background:#22c55e"></i>Meta (7,7)</span>
-        <span><i class="dot" style="background:rgba(56,189,248,0.28);border:1px dashed #38bdf8"></i>Sensores (F/L/R)</span>
       </div>
       <div class="controls">
         <div>
@@ -201,8 +200,8 @@ def save_html_animation(
           <div class="stat-val" id="rewVal">0.0</div>
         </div>
         <div class="stat-box">
-          <div class="stat-label">Estado Percepción (dx,dy,θ,F,L,R)</div>
-          <div class="stat-val" id="stateVal">(7, 7, 1, 0, 0, 0)</div>
+          <div class="stat-label">Estado (x, y, θ)</div>
+          <div class="stat-val" id="stateVal">(0,0,E)</div>
         </div>
       </div>
     </div>
@@ -229,7 +228,6 @@ def save_html_animation(
 const DATA = {json.dumps(payload)};
 const ACTION_NAMES = {{0: "ROTATE_LEFT ↺", 1: "ROTATE_RIGHT ↻", 2: "FORWARD ↑"}};
 const THETA_NAMES = ["N", "E", "S", "W"];
-const DELTAS = [[-1, 0], [0, 1], [1, 0], [0, -1]];
 
 let epIdx = 0;
 let frameIdx = 0;
@@ -301,28 +299,8 @@ function drawGrid() {{
   ctx.font = "bold 12px sans-serif";
   ctx.fillText("★ GOAL", gc * cell + 4, gr * cell + 30);
 
-  // Sensor cells (Front, Left, Right)
   const [ar, ac] = f.agent_pos;
   const theta = f.agent_theta;
-  const sensorDirs = [
-    {{t: theta, flag: f.perception[3], label: "F"}},
-    {{t: (theta + 3) % 4, flag: f.perception[4], label: "L"}},
-    {{t: (theta + 1) % 4, flag: f.perception[5], label: "R"}}
-  ];
-  sensorDirs.forEach(s => {{
-    const nr = ar + DELTAS[s.t][0];
-    const nc = ac + DELTAS[s.t][1];
-    if (nr >= 0 && nr < N && nc >= 0 && nc < N) {{
-      const fills = ["rgba(56, 189, 248, 0.18)", "rgba(239, 68, 68, 0.28)", "rgba(245, 158, 11, 0.28)"];
-      const strokes = ["#38bdf8", "#ef4444", "#f59e0b"];
-      ctx.fillStyle = fills[s.flag];
-      ctx.fillRect(nc * cell + 2, nr * cell + 2, cell - 4, cell - 4);
-      ctx.strokeStyle = strokes[s.flag];
-      ctx.setLineDash([4, 3]);
-      ctx.strokeRect(nc * cell + 2, nr * cell + 2, cell - 4, cell - 4);
-      ctx.setLineDash([]);
-    }}
-  }});
 
   // Obstacles
   f.obstacles.forEach(([or_, oc]) => {{
@@ -354,7 +332,7 @@ function drawGrid() {{
   document.getElementById("actionVal").textContent = `${{actName}} | ε=${{snap.epsilon}}`;
   document.getElementById("rewVal").textContent = `${{f.total_reward.toFixed(1)}} (step: ${{f.reward >= 0 ? "+" : ""}}${{f.reward}})`;
   const p = f.perception;
-  document.getElementById("stateVal").textContent = `(${{p[0]}},${{p[1]}},${{THETA_NAMES[p[2]]}}, F:${{p[3]}},L:${{p[4]}},R:${{p[5]}},B:${{p[6]}})`;
+  document.getElementById("stateVal").textContent = `(${{p[0]}},${{p[1]}},${{THETA_NAMES[p[2]]}})`;
 }}
 
 function drawLineChart(canvasId, seriesList, yMin, yMax, currentEp) {{

@@ -101,10 +101,10 @@
 \end{scope}
 
 % =========================================================================
-% PANEL (b): Reward Shaping & Physics Prior
+% PANEL (b): Discounted Potential-Based Reward Shaping (PBRS) & Zero Init
 % =========================================================================
 \begin{scope}[shift={(10.2, 0)}]
-    \drawpanelgrid{(b) Moldeo de Recompensa y Prior F\'isico}{$R_{\text{train}} = R(s,a,s') + 2.0\,(d_t - d_{t+1})$ + Prior del MDP}
+    \drawpanelgrid{(b) Moldeo Potencial PBRS ($Q_A, Q_B = 0$)}{$R_{\text{train}} = R(s,a,s') + \gamma\,\Phi(s') - \Phi(s),\ \gamma=0.98$}
 
     % Heatmap shading of Manhattan distance d = (7-r) + (7-c)
     \foreach \r in {0,...,7} {
@@ -120,34 +120,34 @@
     \fill[goalgreen, fill opacity=0.32] (7, 0) rectangle (8, 1);
     \node[text=goalgreen, font=\sffamily\bfseries\tiny] at (7.5, 0.5) {GOAL};
 
-    % Agent at (3,3) facing EAST (theta=1) showing 3 shaped cases
+    % Agent at (3,3) facing EAST (theta=1), d_t=8, Phi(s)=-16.0
     \drawagentcol{3}{3}{1}{agentblue}
 
-    % Case 1: Advance toward goal (3,3)->(3,4), delta_d = +1 -> R_train = -1 + 2(+1) = +1.0
+    % Case 1: Advance toward goal (3,3)->(3,4), d_{t+1}=7 -> R_train = -1 + 0.98(-14) - (-16) = +1.28
     \fill[goalgreen, fill opacity=0.25] (4, 4) rectangle (5, 5);
     \draw[goalgreen, line width=1.1pt] (4, 4) rectangle (5, 5);
     \draw[-{Stealth[scale=0.85]}, goalgreen, very thick] (3.82, 4.5) -- (4.35, 4.5);
-    \node[anchor=west, text=goalgreen, font=\ttfamily\bfseries\tiny] at (5.05, 4.70) {Avance ($\Delta d{=}+1$)};
-    \node[anchor=west, text=goalgreen, font=\ttfamily\tiny] at (5.05, 4.30) {$R_{\text{train}} = +1.0$};
+    \node[anchor=west, text=goalgreen, font=\ttfamily\bfseries\tiny] at (5.05, 4.82) {Avance ($\Delta d{=}+1$)};
+    \node[anchor=west, text=goalgreen, font=\ttfamily\tiny] at (5.05, 4.46) {$R_{\text{train}} = +1.28$};
 
-    % Case 2: Rotate in place at (3,3), delta_d = 0 -> R_train = -1.0
+    % Case 2: Rotate in place at (3,3), d_{t+1}=8 -> R_train = -1 + 0.98(-16) - (-16) = -0.68
     \draw[-{Stealth[scale=0.75]}, threatamber, thick] (3.5, 4.18) arc (-90:0:0.32);
-    \node[anchor=north, text=threatamber, font=\ttfamily\bfseries\tiny] at (3.5, 3.92) {Giro ($\Delta d{=}0 \Rightarrow -1.0$)};
+    \node[anchor=north, text=threatamber, font=\ttfamily\bfseries\tiny] at (3.5, 3.92) {Giro ($\Delta d{=}0 \Rightarrow -0.68$)};
 
-    % Case 3: Move away from goal (3,3)->(2,3), delta_d = -1 -> R_train = -1 + 2(-1) = -3.0
+    % Case 3: Move away from goal (3,3)->(2,3), d_{t+1}=9 -> R_train = -1 + 0.98(-18) - (-16) = -2.64
     \fill[obsred, fill opacity=0.22] (3, 5) rectangle (4, 6);
     \draw[obsred, dashed, line width=0.9pt] (3, 5) rectangle (4, 6);
     \draw[-{Stealth[scale=0.8]}, obsred, thick, dashed] (3.5, 4.82) -- (3.5, 5.35);
-    \node[anchor=south, text=obsred, font=\ttfamily\bfseries\tiny] at (3.5, 6.05) {Alejarse ($\Delta d{=}-1 \Rightarrow -3.0$)};
+    \node[anchor=south, text=obsred, font=\ttfamily\bfseries\tiny] at (3.5, 6.26) {Alejarse ($\Delta d{=}-1 \Rightarrow -2.64$)};
 
     % Bottom explanation box
     \fill[bgdark, rounded corners=3pt] (-0.50, -2.55) rectangle (8.50, -0.25);
     \draw[gridline, line width=0.5pt, rounded corners=3pt] (-0.50, -2.55) rectangle (8.50, -0.25);
-    \node[anchor=west, text=goalgreen, font=\sffamily\bfseries\tiny] at (-0.32, -0.58) {2. Gradiente potencial y prior informado por el MDP:};
-    \node[anchor=west, text=textlight, font=\ttfamily\tiny] at (-0.32, -1.02) {• Potencial Manhattan: d(s) = dx\_meta + dy\_meta};
-    \node[anchor=west, text=textlight, font=\ttfamily\tiny] at (-0.32, -1.46) {• Prior f\'isico: Q\_0(s,a) penaliza paredes (-500) y};
-    \node[anchor=west, text=textlight, font=\ttfamily\tiny] at (-0.32, -1.90) {  giros junto a obst\'aculos (-68) frente a amenazas (-60)};
-    \node[anchor=west, text=textmuted, font=\sffamily\tiny] at (-0.32, -2.30) {Elimina estados ciegos en 0.0 y acelera la convergencia.};
+    \node[anchor=west, text=goalgreen, font=\sffamily\bfseries\tiny] at (-0.32, -0.58) {2. Moldeo potencial PBRS e inicializaci\'on en cero:};
+    \node[anchor=west, text=textlight, font=\ttfamily\tiny] at (-0.32, -1.02) {• Potencial: Phi(s) = -2.0*d(x,y), Phi(term) = 0};
+    \node[anchor=west, text=textlight, font=\ttfamily\tiny] at (-0.32, -1.46) {• F(s,s') = gamma*Phi(s') - Phi(s) (en (3,3), d\_t=8)};
+    \node[anchor=west, text=textlight, font=\ttfamily\tiny] at (-0.32, -1.90) {• Tablas Q\_A, Q\_B inicializadas en 0.0 (sin prior)};
+    \node[anchor=west, text=textmuted, font=\sffamily\tiny] at (-0.32, -2.30) {Invariante a la pol\'itica \'optima; acelera la convergencia.};
 \end{scope}
 
 % =========================================================================
@@ -160,19 +160,19 @@
     \draw[threatamber, dashed, line width=1.3pt] (0, 8) -- (8, 0);
     \node[text=threatamber, font=\sffamily\bfseries\tiny, rotate=-45] at (4.35, 4.35) {Eje de Simetr\'ia Diagonal ($x = y$)};
 
-    % Original state s at (r=1, c=5) -> (x=5.5, y=6.5) facing EAST (1), sensors F, L, R
+    % Original state s_Q at (x_a=1, y_a=5, theta_a=E)
     \fill[agentblue, fill opacity=0.22] (5, 6) rectangle (6, 7);
     \draw[agentblue, line width=1.0pt] (5, 6) rectangle (6, 7);
     \drawagentcol{1}{5}{1}{agentblue}
     \draw[-{Stealth[scale=0.85]}, agentblue, very thick] (5.82, 6.5) -- (6.45, 6.5);
-    \node[anchor=south, text=agentblue, font=\ttfamily\bfseries\tiny] at (5.5, 7.05) {$s=(6,2,\text{E},F,L,R,B)$};
+    \node[anchor=south, text=agentblue, font=\ttfamily\bfseries\tiny] at (5.5, 7.05) {$s_Q=(1,5,\text{E})$};
 
-    % Mirror state m_s at (r=5, c=1) -> (x=1.5, y=2.5) facing SOUTH (2), sensors F, R, L
+    % Mirror state s_esp at (x_a=5, y_a=1, theta_a=S)
     \fill[mirrorpurple, fill opacity=0.22] (1, 2) rectangle (2, 3);
     \draw[mirrorpurple, line width=1.0pt] (1, 2) rectangle (2, 3);
     \drawagentcol{5}{1}{2}{mirrorpurple}
     \draw[-{Stealth[scale=0.85]}, mirrorpurple, very thick] (1.5, 2.18) -- (1.5, 1.55);
-    \node[anchor=north, text=mirrorpurple, font=\ttfamily\bfseries\tiny] at (2.1, 1.92) {$s_{\text{esp}}=(2,6,\text{S},F,R,L,B)$};
+    \node[anchor=north, text=mirrorpurple, font=\ttfamily\bfseries\tiny] at (1.5, 1.48) {$s_{\text{esp}}=(5,1,\text{S})$};
 
     % Bidirectional reflection arrow across the diagonal
     \draw[{Stealth[scale=0.85]}-{Stealth[scale=0.85]}, white!85, thick, dotted] (5.1, 6.1) to[bend right=18] (1.9, 2.9);
@@ -185,9 +185,9 @@
     \fill[bgdark, rounded corners=3pt] (-0.50, -2.55) rectangle (8.50, -0.25);
     \draw[gridline, line width=0.5pt, rounded corners=3pt] (-0.50, -2.55) rectangle (8.50, -0.25);
     \node[anchor=west, text=mirrorpurple, font=\sffamily\bfseries\tiny] at (-0.32, -0.58) {3. Reflexi\'on diagonal y paso adaptativo por visitas:};
-    \node[anchor=west, text=textlight, font=\ttfamily\tiny] at (-0.32, -1.02) {• Espejo: (dx,dy,th,F,L,R,B) <-> (dy,dx,th',F,R,L,B)};
+    \node[anchor=west, text=textlight, font=\ttfamily\tiny] at (-0.32, -1.02) {• Espejo: (x\_a, y\_a, th\_a) <-> (y\_a, x\_a, th\_esp)};
     \node[anchor=west, text=textlight, font=\ttfamily\tiny] at (-0.32, -1.46) {• Acciones: ROT\_LEFT <-> ROT\_RIGHT, FWD <-> FWD};
-    \node[anchor=west, text=agentblue, font=\ttfamily\tiny] at (-0.32, -1.90) {• alpha\_eff(s,a) = max(0.005, alpha / (1 + 0.02*N(s,a)))};
+    \node[anchor=west, text=agentblue, font=\ttfamily\tiny] at (-0.32, -1.90) {• alpha\_eff(s,a) = max(0.001, alpha / (1 + 0.02*N(s,a)))};
     \node[anchor=west, text=textmuted, font=\sffamily\tiny] at (-0.32, -2.30) {Duplica muestras efectivas y estabiliza valores Q finales.};
 \end{scope}
 

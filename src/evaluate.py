@@ -10,7 +10,7 @@ def evaluate_agent(
     env: DynamicGridWorld,
     agent: QLearningAgent,
     num_episodes: int = 500,
-    max_steps: int = 200,
+    max_steps: int = 120,
 ) -> Dict[str, float]:
     rewards = []
     lengths = []

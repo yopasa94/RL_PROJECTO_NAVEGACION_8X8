@@ -17,15 +17,12 @@ from src.config import (
     SIMULTANEOUS_MOVES,
     REWARD_WALL,
     SAFE_SPAWN_DISTANCE,
-    SENSOR_FREE,
-    SENSOR_OCCUPIED,
-    SENSOR_THREAT,
     SOUTH,
     START_POS,
 )
 
 FullState = Tuple[int, int, int, Tuple[Tuple[int, int], ...]]
-PerceptionState = Tuple[int, int, int, int, int, int, int]
+PerceptionState = Tuple[int, int, int]
 
 
 class DynamicGridWorld:
@@ -85,75 +82,21 @@ class DynamicGridWorld:
         dr, dc = ORIENTATION_DELTAS[theta]
         return row + dr, col + dc
 
-    def _sensor_code(self, cell: Tuple[int, int], obstacle_set: set) -> int:
-        if not self._in_bounds(*cell):
-            return SENSOR_FREE
-        if cell in obstacle_set:
-            return SENSOR_OCCUPIED
-        if cell == GOAL_POS:
-            return SENSOR_FREE
-        r, c = cell
-        for dr, dc in ORIENTATION_DELTAS.values():
-            if (r + dr, c + dc) in obstacle_set:
-                return SENSOR_THREAT
-        return SENSOR_FREE
-
     def get_perception_state(self) -> PerceptionState:
-        xa, ya = self.agent_pos
-        dx_goal = GOAL_POS[0] - xa
-        dy_goal = GOAL_POS[1] - ya
-        obstacle_set = set(self.obstacles)
-
-        front_cell = self._adjacent_cell(xa, ya, self.agent_theta)
-        left_theta = (self.agent_theta - 1) % NUM_ORIENTATIONS
-        right_theta = (self.agent_theta + 1) % NUM_ORIENTATIONS
-        back_theta = (self.agent_theta + 2) % NUM_ORIENTATIONS
-        left_cell = self._adjacent_cell(xa, ya, left_theta)
-        right_cell = self._adjacent_cell(xa, ya, right_theta)
-        back_cell = self._adjacent_cell(xa, ya, back_theta)
-
-        sens_front = self._sensor_code(front_cell, obstacle_set)
-        sens_left = self._sensor_code(left_cell, obstacle_set)
-        sens_right = self._sensor_code(right_cell, obstacle_set)
-        obs_back = 1 if back_cell in obstacle_set else 0
-
-        return (
-            dx_goal,
-            dy_goal,
-            self.agent_theta,
-            sens_front,
-            sens_left,
-            sens_right,
-            obs_back,
-        )
+        return (self.agent_pos[0], self.agent_pos[1], self.agent_theta)
 
     @staticmethod
     def encode_perception(state: PerceptionState) -> int:
-        dx, dy, theta, sens_f, sens_l, sens_r, obs_b = state
-        idx = dx
-        idx = idx * 8 + dy
-        idx = idx * 4 + theta
-        idx = idx * 3 + sens_f
-        idx = idx * 3 + sens_l
-        idx = idx * 3 + sens_r
-        idx = idx * 2 + obs_b
-        return idx
+        x, y, theta = state
+        return (x * GRID_SIZE + y) * NUM_ORIENTATIONS + theta
 
     @staticmethod
     def decode_perception(idx: int) -> PerceptionState:
-        obs_b = idx % 2
-        idx //= 2
-        sens_r = idx % 3
-        idx //= 3
-        sens_l = idx % 3
-        idx //= 3
-        sens_f = idx % 3
-        idx //= 3
-        theta = idx % 4
-        idx //= 4
-        dy = idx % 8
-        dx = idx // 8
-        return (dx, dy, theta, sens_f, sens_l, sens_r, obs_b)
+        theta = idx % NUM_ORIENTATIONS
+        idx //= NUM_ORIENTATIONS
+        y = idx % GRID_SIZE
+        x = idx // GRID_SIZE
+        return (x, y, theta)
 
     def get_free_neighbors(
         self, pos: Tuple[int, int], occupied: set
@@ -166,23 +109,31 @@ class DynamicGridWorld:
                 self._in_bounds(nr, nc)
                 and (nr, nc) not in occupied
                 and (nr, nc) != GOAL_POS
-                and (self.simultaneous or (nr, nc) != self.agent_pos)
             ):
                 neighbors.append((nr, nc))
         return neighbors
 
     def _move_obstacles(self) -> None:
-        occupied = set(self.obstacles)
-        new_obstacles: List[Tuple[int, int]] = []
-        for obs_pos in self.obstacles:
-            occupied.remove(obs_pos)
-            free_neighbors = self.get_free_neighbors(obs_pos, occupied)
+        initial_occupied = set(self.obstacles)
+        claimants_by_cell: Dict[Tuple[int, int], List[int]] = {}
+
+        for idx, obs_pos in enumerate(self.obstacles):
+            free_neighbors = self.get_free_neighbors(obs_pos, initial_occupied)
             if free_neighbors:
-                next_pos = self.rng.choice(free_neighbors)
+                target = self.rng.choice(free_neighbors)
             else:
-                next_pos = obs_pos
-            occupied.add(next_pos)
-            new_obstacles.append(next_pos)
+                target = obs_pos
+            claimants_by_cell.setdefault(target, []).append(idx)
+
+        new_obstacles = list(self.obstacles)
+        for target, claimants in claimants_by_cell.items():
+            winner = (
+                claimants[0]
+                if len(claimants) == 1
+                else self.rng.choice(claimants)
+            )
+            new_obstacles[winner] = target
+
         self.obstacles = new_obstacles
 
     def is_terminal(self) -> Tuple[bool, str]:
@@ -245,16 +196,20 @@ class DynamicGridWorld:
                 reward = REWARD_COLLISION
                 terminated = True
                 event = "collision"
-            elif action == ACTION_FORWARD and hit_wall:
-                reward = REWARD_WALL
-                terminated = False
-                event = "wall"
             else:
-                reward = REWARD_STEP
-                terminated = False
-                event = "step"
-            if not terminated:
                 self._move_obstacles()
+                if self.agent_pos in self.obstacles:
+                    reward = REWARD_COLLISION
+                    terminated = True
+                    event = "collision"
+                elif action == ACTION_FORWARD and hit_wall:
+                    reward = REWARD_WALL
+                    terminated = False
+                    event = "wall"
+                else:
+                    reward = REWARD_STEP
+                    terminated = False
+                    event = "step"
 
         next_perception = self.get_perception_state()
         info: Dict[str, object] = {

@@ -50,7 +50,7 @@
 \hrule \vspace{0.3cm}
 
 \begin{abstract}
-Este documento presenta el reporte final del proyecto de Aprendizaje por Refuerzo sobre navegación autónoma en una cuadrícula de \(8 \times 8\). El agente debe desplazarse desde \((0,0)\) hasta \((7,7)\) evitando cinco obstáculos móviles que se trasladan de forma simultánea en cada paso de tiempo. Se formalizan los componentes del Proceso de Decisión de Markov (MDP) estados completos, representación perceptual reducida, acciones, recompensas y transición— junto con los ajustes implementados respecto a la entrega parcial anterior. Adicionalmente, se detallan el entorno de ejecución, los tiempos de entrenamiento, el almacenamiento de la \(Q\)-tabla y los resultados de evaluación sobre \(500\) y \(1{,}000\) episodios, contrastando los comportamientos esperados con las limitaciones observadas durante las pruebas.
+Este documento presenta el reporte final del proyecto de Aprendizaje por Refuerzo sobre navegación autónoma en una cuadrícula de \(8 \times 8\). El agente debe desplazarse desde \((0,0)\) hasta \((7,7)\) evitando cinco obstáculos móviles que se trasladan de forma simultánea en cada paso de tiempo. Se formalizan los componentes del Proceso de Decisión de Markov (MDP) —estados completos, representación reducida de pose \((x_a, y_a, \theta_a)\), acciones, recompensas y transición— junto con los ajustes implementados respecto a la entrega parcial anterior. Adicionalmente, se detallan el entorno de ejecución, los tiempos de entrenamiento, el almacenamiento de la \(Q\)-tabla y los resultados de evaluación sobre \(500\) y \(1{,}000\) episodios, contrastando los comportamientos esperados con las limitaciones observadas durante las pruebas.
 \end{abstract}
 
 \vspace{0.25cm} \hrule \vspace{0.35cm}
@@ -70,67 +70,24 @@ donde \(\theta_a \in \{0=\text{Norte}, 1=\text{Este}, 2=\text{Sur}, 3=\text{Oest
     \item \textbf{Colisión (\(\mathcal{S}_{\text{colisión}}\)):} \(\exists\, i \in \{1,\dots,5\}\) tal que \((x'_a, y'_a) = (x'_{o_i}, y'_{o_i})\) o cruce frontal simultáneo en la arista intermedia \(\big((x'_a, y'_a) = (x_{o_i}, y_{o_i}) \land (x'_{o_i}, y'_{o_i}) = (x_a, y_a)\big)\).
 \end{itemize}
 
-\subsection{Representación perceptual reducida y cambios desde la última entrega}
-Dado que el espacio de estados completo tiene cardinalidad \(|\mathcal{S}| = 8 \times 8 \times 4 \times 64^5 \approx 2.75 \times 10^{11}\), se utiliza una representación perceptual egocéntrica para indexar la \(Q\)-tabla. Respecto a la entrega anterior, se realizaron las siguientes modificaciones para incrementar la capacidad de evasión bajo movimientos simultáneos:
-
-\begin{enumerate}[leftmargin=1.2cm]
-    \item \textbf{Ampliación de sensores frontales y laterales de 2 a 3 niveles (\(\{0, 1, 2\}\)):}
-    En la entrega previa, los sensores \(\text{obs}_{\text{frente}}, \text{obs}_{\text{izq}}, \text{obs}_{\text{der}} \in \{0, 1\}\) solo detectaban si la casilla adyacente estaba ocupada en el instante \(t\). Sin embargo, como los obstáculos se mueven \emph{al mismo tiempo} que el agente, un obstáculo ubicado a distancia Manhattan \(1\) de la casilla frontal puede desplazarse hacia dicha casilla en el mismo paso y provocar una colisión. Por ello, cada sensor direccional \(\text{sens}_k \in \{0, 1, 2\}\) para \(k \in \{\text{frente}, \text{izq}, \text{der}\}\) se redefinió con tres niveles:
-    \begin{itemize}
-        \item \(0\) (\texttt{SENSOR\_FREE}): la casilla adyacente está libre y ninguna de sus casillas vecinas contiene un obstáculo (probabilidad de colisión \(0\%\) al avanzar hacia ella).
-        \item \(1\) (\texttt{SENSOR\_OCCUPIED}): la casilla adyacente contiene actualmente un obstáculo.
-        \item \(2\) (\texttt{SENSOR\_THREAT}): la casilla adyacente está libre en el instante \(t\), pero al menos una de sus casillas vecinas contiene un obstáculo que puede entrar en ella en el paso \(t \to t+1\).
-    \end{itemize}
-    \item \textbf{Incorporación del sensor trasero binario (\(\text{obs}_{\text{atrás}} \in \{0, 1\}\)):}
-    Cuando el agente ejecuta una acción de rotación, permanece en su misma casilla \((x_a, y_a)\) durante ese paso de tiempo. Si hay un obstáculo inmediatamente detrás de él, dicho obstáculo puede avanzar hacia \((x_a, y_a)\) mientras el agente gira. Se añadió \(\text{obs}_{\text{atrás}} \in \{0, 1\}\) para detectar esta condición (Figura~\ref{fig:sensores_3niveles}).
-
-\begin{figure}[ht!]
-\centering
-\includegraphics[width=0.78\textwidth]{fig_sensores_3niveles.pdf}
-\caption{Comparación entre la percepción local de la entrega inicial y la ampliación a sensores de 3 niveles más sensor trasero para el agente en \((3,3)\) orientado al Este (\(\theta_a=1\)) con obstáculos en \((3,4)\), \((1,3)\) y \((3,2)\): (a) el modelo binario anterior codifica \(s=(4,4,E,1,0,0)\), dejando ocultos tanto la amenaza \(o_2\) en \((1,3)\) como el obstáculo trasero \(o_3\) en \((3,2)\); (b) el modelo ampliado codifica \(s=(4,4,E,1,2,0,1)\), distinguiendo casilla libre segura (\texttt{sens\_R=0}), ocupada (\texttt{sens\_F=1}), amenazada a un paso (\texttt{sens\_L=2}) y ocupada atrás (\texttt{obs\_B=1}).}
-\label{fig:sensores_3niveles}
-\end{figure}
-    \item \textbf{Actualización del tamaño de la \(Q\)-tabla:}
-    El vector de estado perceptual implementado es:
-    \begin{equation}
-        s_{\text{percepción}} = \big(\Delta x_{\text{meta}},\, \Delta y_{\text{meta}},\, \theta_a,\, \text{sens}_{\text{frente}},\, \text{sens}_{\text{izq}},\, \text{sens}_{\text{der}},\, \text{obs}_{\text{atrás}}\big)
-    \end{equation}
-    donde \(\Delta x_{\text{meta}} = 7 - x_a \in \{0,\dots,7\}\) y \(\Delta y_{\text{meta}} = 7 - y_a \in \{0,\dots,7\}\). El número total de estados perceptuales pasó de \(2{,}048\) a:
-    \begin{equation}
-        |\mathcal{S}_{\text{percepción}}| = 8 \times 8 \times 4 \times 3^3 \times 2 = 13{,}824 \text{ estados}
-    \end{equation}
-    lo que produce una \(Q\)-tabla de \(13{,}824 \times 3 = 41{,}472\) entradas.
-    \item \textbf{Reglas de transición y entrenamiento mejoradas:}
-    \begin{itemize}
-        \item \emph{Distancia segura de aparición (\texttt{SAFE\_SPAWN\_DISTANCE = 3}):} los obstáculos se generan a distancia Manhattan \(\ge 3\) de \((0,0)\) y nunca ingresan a la celda meta \((7,7)\).
-        \item \emph{Moldeo de recompensa (Reward Shaping) y prior físico:} durante el entrenamiento se emplea una señal moldeada \(R_{\text{train}} = R(s,a,s') + 2.0\big((\Delta x + \Delta y) - (\Delta x' + \Delta y')\big)\) e inicialización informada por la geometría y paridad del MDP (\texttt{compute\_physics\_prior}).
-        \item \emph{Actualización simétrica en línea y tasa adaptativa:} cada transición actualiza simultáneamente el estado \((s,a)\) y su reflejo respecto a la diagonal principal del tablero, empleando una tasa de aprendizaje decreciente por conteo de visitas \(\alpha_{\text{eff}}(s,a) = \max\!\big(0.005, \frac{\alpha}{1 + 0.02 N(s,a)}\big)\) (Figura~\ref{fig:reglas_entrenamiento}).
-    \end{itemize}
-\end{enumerate}
+\subsection{Representación reducida para la \(Q\)-tabla}
+El espacio de estados completo del MDP tiene cardinalidad \(|\mathcal{S}| = 8 \times 8 \times 4 \times 64^5 \approx 2.75 \times 10^{11}\), lo cual hace inviable una \(Q\)-tabla exacta sobre \(\mathcal{S}\). De acuerdo con las condiciones del problema, el agente no dispone de sensores ni radar para observar la posición de los obstáculos en tiempo real; los cinco obstáculos móviles forman parte de la dinámica estocástica del ambiente, pero permanecen ocultos para la política.
+Por esta razón, la \(Q\)-tabla se indexa únicamente mediante la pose del agente:
+\begin{equation}
+    s_{Q} = (x_a, y_a, \theta_a)
+\end{equation}
+donde \(x_a, y_a \in \{0,\dots,7\}\) y \(\theta_a \in \{0, 1, 2, 3\}\). Esta representación produce un espacio tabular compacto de:
+\begin{equation}
+    |\mathcal{S}_{Q}| = 8 \times 8 \times 4 = 256 \text{ estados}
+\end{equation}
+y una \(Q\)-tabla de \(256 \times 3 = 768\) entradas. El entrenamiento emplea \textbf{Double \(Q\)-Learning tabular} puro con dos tablas inicializadas en cero (\(Q_A, Q_B \in \mathbb{R}^{256 \times 3}\), sin sobrescritura por heurísticas estáticas), moldeo de recompensa potencial invariante a la política \(F(s,s') = \gamma \Phi(s') - \Phi(s)\) y simetrización diagonal \((x_a, y_a, \theta_a) \leftrightarrow (y_a, x_a, \theta_{\text{espejo}})\); al finalizar se persiste la tabla promediada \(Q = \frac{1}{2}(Q_A + Q_B)\) en \texttt{q\_table.npy} (Figura~\ref{fig:reglas_entrenamiento}).
 
 \begin{figure}[ht!]
 \centering
 \includegraphics[width=0.80\textwidth]{fig_reglas_entrenamiento.pdf}
-\caption{Esquema visual de las reglas de transición y entrenamiento mejoradas: (a) zona segura de aparición inicial (\texttt{SAFE\_SPAWN\_DISTANCE = 3}) alrededor de \((0,0)\) y exclusión de obstáculos en la meta \((7,7)\); (b) gradiente potencial Manhattan \(d(x,y)=(7-x)+(7-y)\) para el moldeo de recompensa \(R_{\text{train}}\) y prior físico de la \(Q\)-tabla; (c) reflexión diagonal en línea \((s,a) \leftrightarrow (s_{\text{espejo}}, a_{\text{espejo}})\) sobre el eje \(x=y\) y tasa de aprendizaje adaptativa \(\alpha_{\text{eff}}(s,a)\).}
+\caption{Esquema visual de las reglas de transición y entrenamiento: (a) zona segura de aparición inicial (\texttt{SAFE\_SPAWN\_DISTANCE = 3}) alrededor de \((0,0)\) y exclusión de obstáculos en la meta \((7,7)\); (b) gradiente potencial Manhattan \(d(x,y)=(7-x)+(7-y)\) para el moldeo invariante a la política \(F(s,s') = \gamma\Phi(s') - \Phi(s)\); (c) reflexión diagonal en línea \((s,a) \leftrightarrow (s_{\text{espejo}}, a_{\text{espejo}})\) sobre el eje \(x=y\) y tasa de aprendizaje adaptativa \(\alpha_{\text{eff}}(s,a)\).}
 \label{fig:reglas_entrenamiento}
 \end{figure}
-
-\begin{table}[h!]
-\centering
-\small
-\renewcommand{\arraystretch}{1.18}
-\caption{Resumen comparativo entre la definición de la entrega inicial y la implementación final.}
-\vspace{0.15cm}
-\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}p{5.0cm} >{\raggedright\arraybackslash}X@{}}
-\toprule
-\textbf{Componente} & \textbf{Entrega Inicial} & \textbf{Implementación Final Reportada} \\ \midrule
-Sensores locales & 3 sensores binarios (\(\{0,1\}^3\)): frente, izquierda, derecha. & 3 sensores de 3 niveles (\(\{0,1,2\}^3\): libre, ocupado, amenaza) + 1 sensor trasero binario (\(\{0,1\}\)). \\ \midrule
-Estados perceptuales & \(8 \times 8 \times 4 \times 2^3 = 2{,}048\) estados. & \(8 \times 8 \times 4 \times 3^3 \times 2 = 13{,}824\) estados. \\ \midrule
-Tamaño de la \(Q\)-tabla & \(2{,}048 \times 3 = 6{,}144\) entradas. & \(13{,}824 \times 3 = 41{,}472\) entradas. \\ \midrule
-Dinámica de colisión & Coincidencia de casilla final (\(x'_a = x'_o\)). & Coincidencia de celda final y colisión frontal en arista intermedia por cruce simultáneo (\(x'_a = x_o \land x'_o = x_a\)). \\ \midrule
-Persistencia y explotación & No especificada en código. & Guardado en disco (\texttt{q\_table.npy}) y carga en agente de explotación (\(\epsilon = 0.0\)). \\ \bottomrule
-\end{tabularx}
-\end{table}
 
 \subsection{Conjunto de acciones (\(\mathcal{A}\))}
 De acuerdo con la especificación del problema, el agente dispone de tres acciones discretas en todo estado no terminal (\(\mathcal{A} = \{a_0, a_1, a_2\}\)), ilustradas en la Figura~\ref{fig:acciones}:
@@ -163,7 +120,7 @@ La función de recompensa del ambiente evalúa cada transición \((s, a, s')\) s
 \centering
 \begin{minipage}[t]{0.48\textwidth}
 \centering
-\includegraphics[width=0.92\textwidth]{fig_recompensas.png}
+\includegraphics[width=0.92\textwidth]{fig_recompensas.pdf}
 \caption{Ejemplos del sistema de recompensas \(R(s,a,s')\): llegada a la meta, colisión con obstáculo, choque contra pared y paso regular.}
 \label{fig:recompensas}
 \end{minipage}\hfill
@@ -174,6 +131,20 @@ La función de recompensa del ambiente evalúa cada transición \((s, a, s')\) s
 \label{fig:transicion}
 \end{minipage}
 \end{figure}
+
+\subsection{Cambios realizados respecto a la entrega parcial}
+Respecto a la formalización inicial de la entrega parcial, se introdujeron tres ajustes fundamentales en la representación del estado y en las reglas de operación del entorno:
+
+\begin{enumerate}[leftmargin=1.2cm]
+    \item \textbf{Transición de \(2{,}048\) estados con sensores binarios a \(256\) estados de pose ciega:}
+    En la entrega parcial se propuso \(s_{\text{percepción}} = (\Delta x_{\text{meta}}, \Delta y_{\text{meta}}, \theta_a, \text{obs}_{\text{frente}}, \text{obs}_{\text{izq}}, \text{obs}_{\text{der}})\), con \(8 \times 8 \times 4 \times 2^3 = 2{,}048\) estados (\(6{,}144\) entradas en la \(Q\)-tabla). Sin embargo, el enunciado del proyecto no concede al agente sensores de proximidad ni observabilidad sobre los obstáculos; mantener dichas variables introduciría información privilegiada ausente en la especificación. Por esta razón, se eliminaron los tres indicadores binarios y se adoptó la pose pura \(s_Q = (x_a, y_a, \theta_a)\), lo cual reduce el espacio tabular en un factor de \(8\times\) (a \(256\) estados y \(768\) entradas) y concentra las visitas empíricas por par \((s, a)\) para entrenar Double \(Q\)-Learning desde cero sin heurísticas previas.
+
+    \item \textbf{Reglas de inicialización segura y dinámica simultánea de obstáculos:}
+    Para evitar bloqueos inevitables antes de que el agente pueda orientarse o avanzar, se incorporó la distancia mínima de aparición \texttt{SAFE\_SPAWN\_DISTANCE = 3} (\(|x_{o_i}| + |y_{o_i}| \ge 3\) respecto a \((0,0)\)) y se restringió la orientación inicial a los dos corredores interiores \(\theta_0 \in \{\text{Este } (1), \text{Sur } (2)\}\). Asimismo, se excluyó explícitamente la meta \((7,7)\) tanto del muestreo inicial como del conjunto de vecinas libres \(\mathcal{N}_{\text{libres}}(x_{o_i}, y_{o_i})\) en cada paso, garantizando su accesibilidad permanente. Además, la transición de los cinco obstáculos se ejecuta de forma simultánea a partir de la fotografía congelada de posiciones actuales —con desempate aleatorio uniforme en caso de conflicto sobre una misma casilla libre—, eliminando la dependencia del orden de la lista cuando existen obstáculos adyacentes (como \(o_4\) y \(o_5\) en la Figura~\ref{fig:transicion}).
+
+    \item \textbf{Reglas de terminación ampliadas:}
+    A la condición original de coincidencia final en la misma celda (\((x'_a, y'_a) = (x'_{o_i}, y'_{o_i})\)) se añadieron dos criterios operativos. Por una parte, la detección de cruce frontal simultáneo (\texttt{crossed\_head\_on}), que termina el episodio con \(R = -100.0\) cuando el agente y un obstáculo intercambian casillas en el mismo paso. Por otra parte, un límite máximo de \texttt{max\_steps\_per\_episode = 200} pasos por episodio para acotar trayectorias cíclicas durante la exploración inicial.
+\end{enumerate}
 
 \section{Condiciones de Hardware/Software y Tiempos de Ejecución}
 El entrenamiento, la serialización de la \(Q\)-tabla y las pruebas de validación se ejecutaron localmente bajo la configuración de hardware y software detallada en la Tabla~\ref{tab:hw_sw}.
@@ -192,11 +163,11 @@ El entrenamiento, la serialización de la \(Q\)-tabla y las pruebas de validaci�
 \textbf{Memoria RAM} & 24 GB de memoria unificada \\
 \textbf{Sistema Operativo} & macOS 26.6.2 (Build 25G83) \\
 \textbf{Lenguaje y Librerías} & Python 3, NumPy (\texttt{float64}), generación de reportes JSON y visualización HTML5 Canvas \\
-\textbf{Hiperparámetros RL} & Episodios \(= 50{,}000\), máx.\ pasos/episodio \(= 200\), \(\alpha_0 = 0.08\) (adaptativo por visitas), \(\gamma = 0.98\), \(\epsilon_{\text{start}} = 1.0\), \(\epsilon_{\text{min}} = 0.01\), \(\epsilon_{\text{decay}} = 0.9995\), semilla (\texttt{seed}) \(= 42\) \\ \bottomrule
+\textbf{Hiperparámetros RL} & Double \(Q\)-Learning tabular (\(Q_A, Q_B\) en cero), episodios \(= 50{,}000\), máx.\ pasos/ep.\ \(= 200\), \(\alpha_0 = 0.08\) (\(\alpha_{\text{eff}} \ge 0.001\)), \(\gamma = 0.98\), \(\epsilon_{\text{start}} = 1.0\), \(\epsilon_{\text{min}} = 0.01\), \(\epsilon_{\text{decay}} = 0.9995\), semilla \(= 42\) \\ \bottomrule
 \end{tabularx}
 \end{table}
 
-La Tabla~\ref{tab:tiempos} reporta el desglose de los tiempos de ejecución medidos en la última corrida del sistema. El entrenamiento completo de \(50{,}000\) episodios (aproximadamente \(1.06 \times 10^6\) pasos de interacción y \(2.13 \times 10^6\) actualizaciones de la \(Q\)-tabla, incluyendo las actualizaciones simétricas en línea) finaliza en \(14.8\text{ segundos}\), con una velocidad media de \(\sim 3{,}385\text{ episodios/segundo}\).
+La Tabla~\ref{tab:tiempos} reporta el desglose de los tiempos de ejecución medidos con Double \(Q\)-Learning tabular sobre \((x_a, y_a, \theta_a)\). El entrenamiento completo de \(50{,}000\) episodios (aproximadamente \(6.72 \times 10^5\) pasos de interacción y \(1.34 \times 10^6\) actualizaciones desacopladas de \(Q_A/Q_B\), incluyendo simetría en línea) finaliza en \(8.54\text{ segundos}\), con una velocidad media de \(\sim 5{,}855\text{ episodios/segundo}\).
 
 \begin{table}[h!]
 \centering
@@ -208,67 +179,72 @@ La Tabla~\ref{tab:tiempos} reporta el desglose de los tiempos de ejecución medi
 \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{6.5cm} c >{\raggedright\arraybackslash}X@{}}
 \toprule
 \textbf{Etapa del Proceso} & \textbf{Tiempo (s)} & \textbf{Detalle de Operación} \\ \midrule
-Inicialización del prior físico & \(0.02\text{ s}\) & Cálculo de valores iniciales sobre las \(41{,}472\) entradas \\
-Entrenamiento \(Q\)-Learning (\(50{,}000\) ep.) y simetrización & \(14.77\text{ s}\) & \(\sim 3{,}385\text{ ep./s}\) con actualización dual \((s,a)\) y espejo; fusión ponderada por visitas \\
-Guardado y carga (\texttt{q\_table.npy}) & \(0.02\text{ s}\) & Escritura en disco y carga en agente de explotación \\
-Evaluación en \(500\) episodios (\texttt{main.py}) & \(0.09\text{ s}\) & Explotación pura (\(\epsilon = 0.0\)) desde archivo cargado \\
-Evaluación en \(1{,}000\) ep.\ + 20 sims (\texttt{test\_simulations.py}) & \(0.20\text{ s}\) & Validación estadística y exportación HTML/JSON \\ \midrule
-\textbf{Tiempo total del pipeline completo} & \(\mathbf{15.10\text{ s}}\) & Entrenamiento, validación y generación de reportes \\ \bottomrule
+Entrenamiento Double \(Q\)-Learning (\(50{,}000\) ep.) & \(8.54\text{ s}\) & \(\sim 5{,}855\text{ ep./s}\) desde cero; actualización dual \((s,a)\) y espejo; simetrización empírica \\
+Guardado y carga (\texttt{q\_table.npy}) & \(<0.01\text{ s}\) & Escritura de \(Q = \frac{1}{2}(Q_A + Q_B)\) (\(768\) entradas) y carga en agente de explotación \\
+Evaluación en \(500\) episodios (\texttt{main.py}) & \(0.04\text{ s}\) & Explotación pura (\(\epsilon = 0.0\)) desde archivo cargado \\
+Evaluación en \(1{,}000\) ep.\ + 20 sims (\texttt{test\_simulations.py}) & \(0.09\text{ s}\) & Validación estadística y exportación HTML/JSON \\ \midrule
+\textbf{Tiempo total del pipeline completo} & \(\mathbf{8.68\text{ s}}\) & Entrenamiento, validación y generación de reportes \\ \bottomrule
 \end{tabularx}
 \end{table}
 
 \section{Resultados Experimentales de Validación}
-Una vez finalizado el entrenamiento, la memoria del agente se grabó en el archivo \texttt{q\_table.npy} (\(41{,}472\) entradas) y se cargó en una nueva instancia de \texttt{QLearningAgent} con \(\epsilon = 0.0\) para evaluar la política aprendida sin exploración aleatoria. La Tabla~\ref{tab:metricas} resume el desempeño obtenido frente a la línea base inicial y bajo las dos modalidades de movimiento del ambiente.
+Una vez finalizado el entrenamiento empírico, la tabla promediada \(Q = \frac{1}{2}(Q_A + Q_B)\) se grabó en el archivo \texttt{q\_table.npy} (\(768\) entradas, dimensión \(256 \times 3\)) y se cargó en una nueva instancia de \texttt{QLearningAgent} con \(\epsilon = 0.0\) para evaluar la política aprendida sin exploración aleatoria. La Figura~\ref{fig:curvas_aprendizaje} muestra la evolución de la recompensa media móvil y de las tasas de éxito y colisión durante los \(50{,}000\) episodios de entrenamiento (\texttt{training\_animation.html}), mientras que la Tabla~\ref{tab:metricas} resume el desempeño de evaluación con la representación ciega \((x_a, y_a, \theta_a)\) bajo las modalidades simultánea y secuencial.
+
+\begin{figure}[ht!]
+\centering
+\includegraphics[width=0.92\textwidth]{fig_curvas_aprendizaje.pdf}
+\caption{Curvas de aprendizaje con Double \(Q\)-Learning tabular durante \(50{,}000\) episodios (\texttt{training\_animation.html}): (a) evolución de la recompensa media móvil; (b) tasas móviles de llegada a la meta y de colisión.}
+\label{fig:curvas_aprendizaje}
+\end{figure}
 
 \begin{table}[ht!]
 \centering
 \small
 \renewcommand{\arraystretch}{1.2}
-\caption{Resultados cuantitativos de evaluación de la política cargada desde \texttt{q\_table.npy}.}
+\caption{Resultados cuantitativos de evaluación de la política cargada desde \texttt{q\_table.npy} (\(256 \times 3 = 768\) entradas, Double \(Q\)-Learning empírico).}
 \label{tab:metricas}
 \vspace{0.15cm}
 \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}X c c c c c@{}}
 \toprule
 \textbf{Configuración Evaluada} & \textbf{Éxito} & \textbf{Colisión} & \textbf{Recompensa Media} & \textbf{Pasos} & \textbf{Pared} \\ \midrule
-Línea base previa (Sin penalizar cruce frontal, \(1{,}000\) ep.) & \(75.8\%\) & \(24.2\%\) & \(+34.25 \pm 82.99\) & \(18.3\) & \(0.00\) \\
-\textbf{Agente mejorado con colisión frontal (Simultáneo, \(500\) ep.)} & \(\mathbf{56.2\%}\) & \(\mathbf{43.8\%}\) & \(\mathbf{-3.26 \pm 95.67}\) & \(\mathbf{16.7}\) & \(\mathbf{0.00}\) \\
-\textbf{Agente mejorado con colisión frontal (Simultáneo, \(1{,}000\) ep.)} & \(\mathbf{54.5\%}\) & \(\mathbf{45.5\%}\) & \(\mathbf{-6.35 \pm 95.88}\) & \(\mathbf{16.3}\) & \(\mathbf{0.00}\) \\
-Agente mejorado (Muestra 20 sims grabadas) & \(\mathbf{60.0\%}\) & \(40.0\%\) & \(+5.85 \pm 94.75\) & \(15.2\) & \(0.00\) \\
-Agente mejorado (Modo Secuencial, \(1{,}000\) ep.) & \(\mathbf{100.0\%}\) & \(\mathbf{0.0\%}\) & \(\mathbf{+84.06 \pm 2.75}\) & \(\mathbf{16.9}\) & \(\mathbf{0.00}\) \\ \bottomrule
+\textbf{Agente \((x_a, y_a, \theta_a)\) (Simultáneo, \(500\) ep., \texttt{main.py})} & \(\mathbf{33.6\%}\) & \(\mathbf{66.4\%}\) & \(\mathbf{-41.72 \pm 90.90}\) & \(\mathbf{9.9}\) & \(\mathbf{0.00}\) \\
+\textbf{Agente \((x_a, y_a, \theta_a)\) (Simultáneo, \(1{,}000\) ep.)} & \(\mathbf{36.0\%}\) & \(\mathbf{64.0\%}\) & \(\mathbf{-37.10 \pm 92.37}\) & \(\mathbf{10.1}\) & \(\mathbf{0.00}\) \\
+Agente \((x_a, y_a, \theta_a)\) (Muestra 20 sims grabadas) & \(\mathbf{50.0\%}\) & \(50.0\%\) & \(-9.10 \pm 95.12\) & \(10.1\) & \(0.00\) \\
+Agente \((x_a, y_a, \theta_a)\) (Modo Secuencial, \(1{,}000\) ep.) & \(\mathbf{48.1\%}\) & \(\mathbf{51.9\%}\) & \(\mathbf{-13.92 \pm 96.23}\) & \(\mathbf{11.1}\) & \(\mathbf{0.00}\) \\ \bottomrule
 \end{tabularx}
 \end{table}
 
-En las 20 simulaciones grabadas (\texttt{simulations\_report.json} y \texttt{simulations\_animation.html}), el agente alcanzó la meta en 12 de los 20 episodios (\(60.0\%\)) y en 7 de los primeros 10 episodios (\(70.0\%\)), destacando trayectorias óptimas de 15 pasos con recompensa \(+86.0\) (\texttt{Sim \#8, \#10}) y maniobras evasivas exitosas (\texttt{Sim \#1, \#3, \#4, \#6, \#7, \#11, \#13, \#14, \#19, \#20}). La Figura~\ref{fig:sim_transiciones} ilustra cuatro estados de transición representativos de la dinámica del entorno, mostrando la activación de los sensores locales de 3 niveles, la maniobra de giro ante amenaza (\(\text{sens}_{\text{frente}}=2\)), el diagnóstico de la regla física de colisión frontal por cruce simultáneo (\(x'_a = x_o \land x'_o = x_a \implies \text{Colisión}\)) sobre una casilla ocupada (\(\text{sens}_{\text{frente}}=1\)) y la llegada a la meta \((7,7)\).
+En las 20 simulaciones grabadas (\texttt{simulations\_report.json} y \texttt{simulations\_animation.html}), el agente alcanzó la meta en 10 de los 20 episodios (\(50.0\%\)) y en 5 de los primeros 10 episodios (\(50.0\%\)). Todos los episodios exitosos (\texttt{Sim \#3, \#4, \#5, \#9, \#10, \#11, \#12, \#16, \#19, \#20}) completaron la trayectoria óptima perimetral en exactamente 15 pasos con recompensa \(+86.0\); por el contrario, las colisiones se produjeron entre los pasos 2 y 11 cuando algún obstáculo interceptó aleatoriamente la ruta de avance. La Figura~\ref{fig:sim_transiciones} ilustra cuatro instantes clave de estas trayectorias perimetrales y de colisión simultánea.
 
 \begin{figure}[ht!]
 \centering
 \includegraphics[width=0.78\textwidth]{fig_simulacion_transiciones.pdf}
-\caption{Secuencia de estados de transición del entorno: (a) estado inicial en \((0,0)\) con sensores libres; (b) detección de amenaza (\texttt{F:2, L:2}) en \((1,0)\) y giro evasivo \(a_0\) hacia el Este; (c) colisión frontal por cruce simultáneo de posiciones (\(x'_a = x_o \land x'_o = x_a\)) al intentar avanzar sobre una casilla ocupada (\texttt{F:1}), penalizada con \(R=-100\); (d) trayectoria óptima completa hasta la meta \((7,7)\) ejecutando la política aprendida.}
+\caption{Estados de transición extraídos de las simulaciones con pose \(s_Q=(x_a, y_a, \theta_a)\): (a) estado inicial en \((0,0)\) (\texttt{Sim \#3}); (b) giro de \(90^\circ\) en la esquina \((7,0)\) hacia el Este (\texttt{Sim \#3}); (c) colisión simultánea en el corredor perimetral \((0,5)\) (\texttt{Sim \#1}, paso 5, \(R=-100\), acumulada \(-104.0\)); (d) trayectoria óptima perimetral completa de 15 pasos hasta la meta \((7,7)\) (\texttt{Sim \#3}, recompensa \(+86.0\)).}
 \label{fig:sim_transiciones}
 \end{figure}
+
 \section{Comportamiento Esperado vs.\ Comportamiento No Esperado Observado}
 
 \subsection{Comportamiento esperado del agente}
-Durante la explotación de la \(Q\)-tabla entrenada se observaron tres conductas consistentes con el diseño del MDP. En primer lugar, cuando el corredor perimetral está despejado, el agente sigue la ruta mínima de 15 pasos (recompensa \(+86.0\)): avanza 7 casillas en su dirección inicial (\(\text{Sur}\) hasta \((7,0)\) o \(\text{Este}\) hasta \((0,7)\)), ejecuta una única rotación de \(90^\circ\) en la esquina y avanza 7 casillas adicionales hasta \((7,7)\). Además de minimizar los giros, el perímetro presenta menor densidad estacionaria de obstáculos; en una caminata aleatoria uniforme sobre un grafo no dirigido, la distribución estacionaria es proporcional al grado del nodo (\(\pi(v) \propto \deg(v)\)), por lo que las celdas interiores (\(\deg = 4\)) concentran un \(33\%\) más de tráfico que los bordes (\(\deg = 3\)) y el doble que las esquinas (\(\deg = 2\)).
+Durante la explotación de la \(Q\)-tabla entrenada sobre \((x_a, y_a, \theta_a)\) se observaron dos conductas consistentes con el diseño del MDP. En primer lugar, el agente converge de forma determinista hacia la ruta mínima de 15 pasos por el perímetro (recompensa \(+86.0\)): avanza 7 casillas en su dirección inicial (\(\text{Sur}\) hasta \((7,0)\) o \(\text{Este}\) hasta \((0,7)\)), ejecuta una única rotación de \(90^\circ\) en la esquina y avanza 7 casillas adicionales hasta \((7,7)\). Además de minimizar el número de pasos y giros, el perímetro reduce la exposición a obstáculos; en una caminata aleatoria uniforme sobre un grafo no dirigido, la distribución estacionaria es proporcional al grado del nodo (\(\pi(v) \propto \deg(v)\)), por lo que las celdas interiores (\(\deg = 4\)) concentran un \(33\%\) más de tráfico que los bordes (\(\deg = 3\)) y el doble que las esquinas (\(\deg = 2\)).
 
-En segundo lugar, se obtuvo la eliminación total de choques contra las paredes (\texttt{mean\_wall\_hits = 0.0}), dado que el agente identifica los bordes de la cuadrícula a partir de \((\Delta x_{\text{meta}}, \Delta y_{\text{meta}}, \theta_a)\) y evita avanzar fuera del tablero o girar hacia un muro exterior. Por último, cuando el sensor frontal detecta amenaza (\(\text{sens}_{\text{frente}} = 2\)) sin obstáculos adyacentes (\(\text{adj\_count} = 0\)), el agente utiliza la rotación como maniobra de espera sin riesgo inmediato para cambiar la paridad en el grafo bipartito del tablero, permitiendo que el obstáculo despeje la ruta o desviándose por filas y columnas interiores (observado en \texttt{Sim \#1} y \texttt{Sim \#3}).
+En segundo lugar, se obtuvo la eliminación total de choques contra las paredes (\texttt{mean\_wall\_hits = 0.0}), dado que el agente identifica los bordes de la cuadrícula directamente a partir de \((x_a, y_a, \theta_a)\) y evita avanzar fuera del tablero o girar hacia un muro exterior.
 
 \subsection{Comportamiento no esperado observado y su diagnóstico}
-Durante el análisis de las simulaciones interactivas se identificaron tres fenómenos que explican las fallas iniciales y el límite de desempeño del modo simultáneo:
+Durante el análisis de las simulaciones se identificaron tres fenómenos que explican las fallas iniciales y el límite de desempeño de la política sin sensores:
 
 \begin{enumerate}[leftmargin=1.2cm]
     \item \textbf{Colisión frontal por cruce simultáneo de posiciones (\(x'_a = x_o \land x'_o = x_a\)):}
-    En las primeras versiones del ambiente, cuando el agente avanzaba hacia una casilla ocupada (\(\text{sens}_{\text{frente}} = 1\)) y el obstáculo se desplazaba al mismo tiempo hacia la celda previa del agente, el comprobador de colisiones evaluaba únicamente la coincidencia final (\(x'_a = x'_o\)). Al intercambiar posiciones sin compartir celda final, la transición se registraba como segura. Físicamente, este intercambio equivale a un cruce frontal en la arista intermedia, por lo que se incorporó la verificación \texttt{crossed\_head\_on} en \texttt{environment.py}:
+    En las primeras versiones del ambiente, cuando el agente avanzaba hacia una casilla ocupada por un obstáculo y este se desplazaba al mismo tiempo hacia la celda previa del agente, el comprobador de colisiones evaluaba únicamente la coincidencia final (\(x'_a = x'_o\)). Al intercambiar posiciones sin compartir celda final, la transición se registraba como segura. Físicamente, este intercambio equivale a un cruce frontal en la arista intermedia, por lo que se incorporó la verificación \texttt{crossed\_head\_on} en \texttt{environment.py}:
     \begin{equation}
     \text{Colisión} \iff (x'_a \in \mathcal{O}') \lor \exists o \in \mathcal{O}: (x'_a = x_o \land x'_o = x_a)
     \end{equation}
-    Al penalizar este cruce con \(R = -100\), avanzar hacia \(\text{sens}_{\text{frente}} = 1\) conlleva un riesgo de colisión entre \(25\%\) y \(50\%\), lo que lleva a la \(Q\)-tabla a favorecer maniobras evasivas o giros preventivos.
 
     \item \textbf{Borrado de penalizaciones negativas durante la simetrización con \(\max(\cdot)\):}
-    Inicialmente, la función \texttt{symmetrize\_q\_table} aplicaba \(\max\big(Q(s,a), Q(s_{\text{m}}, a_{\text{m}})\big)\) al finalizar el entrenamiento, provocando acciones suicidas en estados poco frecuentes. Si un estado peligroso \(s\) tenía valores aprendidos negativos (p.\ ej., \(-15.0\) para esquivar y \(-90.0\) para chocar), pero su espejo \(s_{\text{espejo}}\) no había sido visitado (\(Q = 0.0\)), el operador \(\max(\cdot, 0.0)\) sobrescribía ambas entradas con \(0.0\). Esto se corrigió registrando la matriz de visitas \texttt{visit\_counts} y realizando actualizaciones simétricas en línea en cada paso.
+    Inicialmente, la función \texttt{symmetrize\_q\_table} aplicaba \(\max\big(Q(s,a), Q(s_{\text{m}}, a_{\text{m}})\big)\) al finalizar el entrenamiento, provocando acciones subóptimas en estados poco frecuentes. Si un estado \(s\) tenía valores aprendidos negativos, pero su espejo \(s_{\text{espejo}}\) no había sido visitado (\(Q = 0.0\)), el operador \(\max(\cdot, 0.0)\) sobrescribía ambas entradas con \(0.0\). Esto se corrigió registrando la matriz de visitas \texttt{visit\_counts} y realizando actualizaciones simétricas en línea en cada paso.
 
-    \item \textbf{Límite estocástico ante 5 obstáculos en movimiento simultáneo:}
-    Al penalizar el cruce frontal y las colisiones simultáneas, la tasa de éxito en modo simultáneo se sitúa en \(\approx 55\%\text{--}60\%\) sobre \(1{,}000\) episodios. En cada paso de tiempo, el agente solo puede permanecer en su celda actual (si rota) o avanzar a la celda frontal. Cuando un obstáculo se encuentra adyacente o a 2 casillas en ruta de convergencia, ambas decisiones presentan una probabilidad positiva de colisión (\(P \ge 0.25\)). Con 5 obstáculos en una cuadrícula \(8 \times 8\), el agente enfrenta entre 1 y 3 cruces forzados por trayectoria, lo que acota la supervivencia en 15 pasos cerca de \((1 - 0.25)^2 \approx 56.2\%\), en concordancia con el desempeño empírico observado (\(54.5\%\text{--}56.2\%\)).
+    \item \textbf{Límite estocástico de observabilidad sin sensores ante 5 obstáculos móviles:}
+    Al operar únicamente con la pose \((x_a, y_a, \theta_a)\) sin observar la posición de los obstáculos, la política óptima consiste en minimizar el tiempo de exposición siguiendo el corredor perimetral de 15 pasos. Gracias al aprendizaje empírico con Double \(Q\)-Learning (que elimina tanto el sesgo de maximización como la sobrescritura por heurísticas estáticas), el agente descubre estrictamente por colisión la menor densidad estacionaria del perímetro, elevando su tasa empírica de éxito a \(33.6\%\text{--}36.0\%\) en modo simultáneo (\(48.1\%\) en modo secuencial). Sin embargo, cualquier intersección aleatoria de los cinco obstáculos con la trayectoria perimetral resulta inevitable para una política ciega, fijando este rango como techo probabilístico sin percepción de obstáculos.
 \end{enumerate}
 
 \section{Posible Mejora: Acción Compuesta de Rotación y Avance Simultáneo}

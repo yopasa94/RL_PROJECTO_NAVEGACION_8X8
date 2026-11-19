@@ -25,7 +25,6 @@ def main() -> None:
     assert agent.q_table.size == Q_TABLE_ENTRIES
     history = train_agent(env, agent, config)
 
-    # Save trained Q-table to disk and load it into a fresh agent for exploitation
     q_table_path = agent.save_q_table(str(base_dir / "q_table.npy"))
     exploited_agent = QLearningAgent(seed=config.seed)
     exploited_agent.load_q_table(q_table_path)
@@ -42,12 +41,13 @@ def main() -> None:
         history, output_path=str(base_dir / "training_animation.html")
     )
 
-    # Save evaluation report metrics to JSON
     report_path = base_dir / "test_results.json"
     report_data = {
+        "algorithm": "Tabular Double Q-Learning (blind pose (x, y, theta))",
         "q_table_entries": int(exploited_agent.q_table.size),
         "q_table_shape": list(exploited_agent.q_table.shape),
         "q_table_path": q_table_path,
+        "episodes": config.episodes,
         "last_100_train_mean_reward": round(sum(history["rewards"][-100:]) / 100.0, 2),
         "evaluation_500_episodes": metrics,
     }

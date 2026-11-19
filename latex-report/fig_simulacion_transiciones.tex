@@ -15,23 +15,15 @@
 \definecolor{textlight}{HTML}{F8FAFC}
 \definecolor{textmuted}{HTML}{94A3B8}
 
-% Helper macro to draw an 8x8 simulation board in dark mode matching simulations_animation.html
-% Coordinates: row r in 0..7 (top to bottom -> y = 7-r), col c in 0..7 (left to right -> x = c)
 \newcommand{\drawboardbase}[1]{
-    % Panel background
     \fill[paneldark, rounded corners=6pt] (-0.65, -2.15) rectangle (8.65, 8.95);
     \draw[gridline, line width=0.8pt, rounded corners=6pt] (-0.65, -2.15) rectangle (8.65, 8.95);
-    % Title bar
     \node[anchor=west, text=textlight, font=\sffamily\bfseries\scriptsize] at (-0.42, 8.58) {#1};
-    % Canvas background
     \fill[cellbg] (0, 0) rectangle (8, 8);
-    % Start cell (0,0) -> (x=0..1, y=7..8)
     \fill[agentblue, fill opacity=0.16] (0, 7) rectangle (1, 8);
-    \node[anchor=north west, text=textmuted, font=\sffamily\bfseries\tiny] at (0.04, 7.96) {START};
-    % Goal cell (7,7) -> (x=7..8, y=0..1)
+    \node[anchor=north, inner sep=0.8pt, scale=0.78, text=textmuted, font=\sffamily\bfseries\tiny] at (0.5, 7.97) {START};
     \fill[goalgreen, fill opacity=0.26] (7, 0) rectangle (8, 1);
-    \node[text=goalgreen, font=\sffamily\bfseries\tiny] at (7.5, 0.32) {GOAL};
-    % Grid lines and indices
+    \node[anchor=south, inner sep=0.8pt, scale=0.78, text=goalgreen, font=\sffamily\bfseries\tiny] at (7.5, 0.03) {GOAL};
     \draw[gridline, line width=0.45pt] (0, 0) grid (8, 8);
     \draw[gridline, line width=0.9pt] (0, 0) rectangle (8, 8);
     \foreach \i in {0,...,7} {
@@ -40,134 +32,102 @@
     }
 }
 
-% Draw sensor cell: #1=row, #2=col, #3=color, #4=label (F:0, F:1, F:2, etc.)
-\newcommand{\drawsensor}[4]{
-    \pgfmathsetmacro{\sx}{#2}
-    \pgfmathsetmacro{\sy}{7-#1}
-    \fill[#3, fill opacity=0.24] (\sx+0.05, \sy+0.05) rectangle (\sx+0.95, \sy+0.95);
-    \draw[#3, dashed, line width=0.9pt] (\sx+0.05, \sy+0.05) rectangle (\sx+0.95, \sy+0.95);
-    \node[anchor=south east, text=#3, font=\ttfamily\bfseries\tiny] at (\sx+0.94, \sy+0.04) {#4};
-}
-
-% Draw obstacle at (#1=row, #2=col)
 \newcommand{\drawobs}[2]{
     \pgfmathsetmacro{\ox}{#2}
     \pgfmathsetmacro{\oy}{7-#1}
     \fill[obsred, rounded corners=2.2pt] (\ox+0.18, \oy+0.18) rectangle (\ox+0.82, \oy+0.82);
 }
 
-% Draw agent at (#1=row, #2=col, #3=theta: 0=N, 1=E, 2=S, 3=W)
 \newcommand{\drawagent}[3]{
     \pgfmathsetmacro{\ax}{#2+0.5}
     \pgfmathsetmacro{\ay}{7-#1+0.5}
     \pgfmathsetmacro{\rotangle}{-#3*90}
     \begin{scope}[shift={(\ax,\ay)}, rotate=\rotangle]
-        \fill[agentblue] (0, 0.34) -- (0.28, -0.28) -- (0, -0.14) -- (-0.28, -0.28) -- cycle;
-        \draw[white, line width=0.35pt] (0, 0.34) -- (0.28, -0.28) -- (0, -0.14) -- (-0.28, -0.28) -- cycle;
+        \fill[agentblue] (0, 0.25) -- (0.21, -0.21) -- (0, -0.10) -- (-0.21, -0.21) -- cycle;
+        \draw[white, line width=0.35pt] (0, 0.25) -- (0.21, -0.21) -- (0, -0.10) -- (-0.21, -0.21) -- cycle;
     \end{scope}
 }
 
-% Draw HUD stats box at bottom of panel
-\newcommand{\drawhud}[4]{
+\newcommand{\drawhud}[5]{
     \fill[bgdark, rounded corners=3pt] (-0.45, -1.95) rectangle (8.45, -0.22);
     \draw[gridline, line width=0.5pt, rounded corners=3pt] (-0.45, -1.95) rectangle (8.45, -0.22);
     \node[anchor=west, text=textmuted, font=\sffamily\tiny] at (-0.28, -0.52) {Paso/Ev.: \texttt{\textcolor{textlight}{#1}}};
-    \node[anchor=west, text=textmuted, font=\sffamily\tiny] at (3.55, -0.52) {Acci\'on: \texttt{\textcolor{agentblue}{#2}}};
-    \node[anchor=west, text=textmuted, font=\sffamily\tiny] at (-0.28, -1.05) {Recompensa Acum.: \texttt{\textcolor{goalgreen}{#3}}};
-    \node[anchor=west, text=textmuted, font=\sffamily\tiny] at (-0.28, -1.58) {Estado $(dx,dy,\theta,F,L,R,B)$: \texttt{\textcolor{textlight}{#4}}};
+    \node[anchor=west, text=textmuted, font=\sffamily\tiny] at (3.45, -0.52) {Acci\'on: \texttt{\textcolor{agentblue}{#2}}};
+    \node[anchor=west, text=textmuted, font=\sffamily\tiny] at (-0.28, -1.05) {Recompensa Acum.: \texttt{\textcolor{#5}{#3}}};
+    \node[anchor=west, text=textmuted, font=\sffamily\tiny] at (-0.28, -1.58) {Estado $s_Q=(x_a, y_a, \theta_a)$: \texttt{\textcolor{textlight}{#4}}};
 }
 
 \begin{document}
 \begin{tikzpicture}[scale=0.72]
 
 % =========================================================================
-% PANEL (a): Sim #10 - Step 0 (Start)
+% PANEL (a): Sim #3 - Step 0 (Start at (0,0) facing SOUTH)
 % =========================================================================
 \begin{scope}[shift={(0, 0)}]
-    \drawboardbase{(a) Paso $t=0$: Estado Inicial en $(0,0)$}
-    % Sensors at (0,0) facing SOUTH (theta=2): Front=(1,0) F:0, Left=(0,1) L:0
-    \drawsensor{1}{0}{agentblue}{F:0}
-    \drawsensor{0}{1}{agentblue}{L:0}
-    % Obstacles: [[3, 1], [7, 3], [4, 5], [7, 6], [4, 3]]
-    \drawobs{3}{1}
+    \drawboardbase{(a) Sim \#3 ($t=0$): Estado Inicial en $(0,0)$}
+    \drawobs{1}{6}
+    \drawobs{6}{6}
+    \drawobs{0}{3}
     \drawobs{7}{3}
-    \drawobs{4}{5}
-    \drawobs{7}{6}
-    \drawobs{4}{3}
-    % Movement arrow of obstacle (3,1) -> (2,1) and agent (0,0) -> (1,0)
-    \draw[-{Stealth[scale=0.8]}, obsred!80, thick, densely dotted] (1.5, 4.82) -- (1.5, 5.45);
-    \draw[-{Stealth[scale=0.9]}, agentblue, very thick] (0.5, 7.15) -- (0.5, 6.55);
-    % Agent at (0,0) facing SOUTH (2)
+    \drawobs{6}{3}
+    \draw[-{Stealth[scale=0.9]}, agentblue, very thick] (0.5, 7.20) -- (0.5, 6.55);
     \drawagent{0}{0}{2}
-    \drawhud{0 / start}{FORWARD ($a_2$)}{0.0 (paso: 0.0)}{(7, 7, S, F:0, L:0, R:0, B:0)}
+    \drawhud{0 / start}{INIT}{0.0 (paso: 0.0)}{(0, 0, S)}{textlight}
 \end{scope}
 
 % =========================================================================
-% PANEL (b): Sim #10 - Step 1 (Threat Detection F:2, L:2 -> Rotate Left)
+% PANEL (b): Sim #3 - Step 7 -> 8 (Corner turn at (7,0) SOUTH -> EAST)
 % =========================================================================
 \begin{scope}[shift={(10.0, 0)}]
-    \drawboardbase{(b) Paso $t=1$: Detecci\'on de Amenaza y Giro ($a_0$)}
-    % Sensors at (1,0) facing SOUTH (theta=2): Front=(2,0) F:2, Left=(1,1) L:2
-    \drawsensor{2}{0}{threatamber}{F:2}
-    \drawsensor{1}{1}{threatamber}{L:2}
-    % Obstacles at step 1: [[2, 1], [7, 4], [4, 4], [6, 6], [3, 3]]
-    \drawobs{2}{1}
-    \drawobs{7}{4}
-    \drawobs{4}{4}
-    \drawobs{6}{6}
+    \drawboardbase{(b) Sim \#3 ($t=7 \to 8$): Giro en $(7,0)$}
+    \draw[agentblue!60, line width=1.4pt, densely dashed] (0.5, 7.5) -- (0.5, 0.5);
+    \drawobs{3}{6}
+    \drawobs{5}{5}
+    \drawobs{0}{3}
     \drawobs{3}{3}
-    % Threat arrows from obstacle (2,1) toward (2,0) and (1,1)
-    \draw[-{Stealth[scale=0.75]}, threatamber, thick, dashed] (1.18, 5.5) -- (0.85, 5.5);
-    \draw[-{Stealth[scale=0.75]}, threatamber, thick, dashed] (1.5, 5.82) -- (1.5, 6.15);
-    % Agent at (1,0) facing SOUTH (2) rotating LEFT to EAST (1)
-    \drawagent{1}{0}{2}
-    \draw[-{Stealth[scale=0.8]}, agentblue, thick] (0.5, 6.15) arc (-90:0:0.35);
-    \drawhud{1 / step}{ROTATE\_LEFT ($a_0 \circlearrowleft$)}{-1.0 (paso: -1.0)}{(6, 7, S, F:2, L:2, R:0, B:0)}
+    \drawobs{6}{5}
+    \drawagent{7}{0}{1}
+    \draw[-{Stealth[scale=0.85]}, agentblue, very thick] (0.5, 0.14) arc (-90:0:0.36);
+    \drawhud{8 / step}{ROTATE\_LEFT ($a_0 \circlearrowleft$)}{-8.0 (paso: -1.0)}{(7, 0, E)}{textlight}
 \end{scope}
 
 % =========================================================================
-% PANEL (c): Cruce Frontal Simultáneo (x'_a = x_o \land x'_o = x_a -> Colisión)
+% PANEL (c): Sim #1 - Step 4 -> 5 (Simultaneous collision at (0,5))
 % =========================================================================
 \begin{scope}[shift={(0, -12.2)}]
-    \drawboardbase{(c) Cruce Frontal Simult\'aneo ($x'_a = x_o \land x'_o = x_a \implies$ Colisi\'on)}
-    % At step 3: agent at (1,1) facing EAST (1), Front=(1,2) is F:1 (OCCUPIED), Left=(0,1) L:0, Right=(2,1) R:0
-    \drawsensor{1}{2}{obsred}{F:1}
-    \drawsensor{0}{1}{agentblue}{L:0}
-    \drawsensor{2}{1}{agentblue}{R:0}
-    % Obstacles at step 3: [[1, 2], [6, 3], [5, 3], [6, 6], [3, 3]]
-    \drawobs{1}{2}
-    \drawobs{6}{3}
-    \drawobs{5}{3}
-    \drawobs{6}{6}
-    \drawobs{3}{3}
-    % Simultaneous swap collision arrows between agent (1,1)->(1,2) and obstacle (1,2)->(1,1)
-    \draw[-{Stealth[scale=0.85]}, agentblue, very thick] (1.75, 6.62) to[bend left=25] (2.45, 6.62);
-    \draw[-{Stealth[scale=0.85]}, obsred!90, very thick, densely dashed] (2.25, 6.38) to[bend left=25] (1.55, 6.38);
-    \node[draw=obsred, fill=paneldark, text=obsred, font=\sffamily\bfseries\tiny, rounded corners=2pt] at (2.0, 6.5) {!~COLISI\'ON~!};
-    \drawagent{1}{1}{1}
-    \drawhud{3 / colisi\'on}{FORWARD ($a_2 \to (1,2)$)}{-103.0 (paso: -100.0)}{(6, 6, E, F:1, L:0, R:0, B:0)}
+    \drawboardbase{(c) Sim \#1 ($t=4 \to 5$): Colisi\'on en $(0,5)$}
+    \draw[agentblue!60, line width=1.4pt, densely dashed] (0.5, 7.5) -- (4.5, 7.5);
+    \drawobs{2}{1}
+    \drawobs{6}{5}
+    \drawobs{1}{4}
+    \drawobs{4}{5}
+    \drawobs{1}{5}
+    \draw[-{Stealth[scale=0.85]}, agentblue, very thick] (4.76, 7.5) -- (5.42, 7.5);
+    \draw[-{Stealth[scale=0.85]}, obsred!90, very thick, densely dashed] (5.5, 6.84) -- (5.5, 7.42);
+    \fill[obsred, fill opacity=0.25] (5.05, 7.05) rectangle (5.95, 7.95);
+    \draw[obsred, thick] (5.05, 7.05) rectangle (5.95, 7.95);
+    \node[draw=obsred, fill=paneldark, text=obsred, font=\sffamily\bfseries\tiny, rounded corners=2pt] at (7.0, 7.5) {!~COLISI\'ON~!};
+    \drawagent{0}{4}{1}
+    \drawhud{5 / colisi\'on}{FORWARD ($a_2 \to (0,5)$)}{-104.0 (paso: -100.0)}{(0, 5, E)}{obsred}
 \end{scope}
 
 % =========================================================================
-% PANEL (d): Sim #10 - Step 16 (Full Trajectory & Goal Reached)
+% PANEL (d): Sim #3 - Step 15 (Optimal 15-step perimeter trajectory & Goal)
 % =========================================================================
 \begin{scope}[shift={(10.0, -12.2)}]
-    \drawboardbase{(d) Paso $t=16$: Trayectoria Completa y Meta $(7,7)$}
-    % Full path of Sim #10: (0,0)->(1,0)->(1,7)->(7,7)
+    \drawboardbase{(d) Sim \#3 ($t=15$): Ruta Perimetral y Meta}
     \draw[agentblue!75, line width=1.6pt, rounded corners=3pt, -{Stealth[scale=0.9]}]
-        (0.5, 7.5) -- (0.5, 6.5) -- (7.5, 6.5) -- (7.5, 0.65);
-    \foreach \px/\py in {0.5/7.5, 0.5/6.5, 1.5/6.5, 2.5/6.5, 3.5/6.5, 4.5/6.5, 5.5/6.5, 6.5/6.5, 7.5/6.5, 7.5/5.5, 7.5/4.5, 7.5/3.5, 7.5/2.5, 7.5/1.5} {
+        (0.5, 7.5) -- (0.5, 0.5) -- (7.22, 0.5);
+    \foreach \px/\py in {0.5/7.5, 0.5/6.5, 0.5/5.5, 0.5/4.5, 0.5/3.5, 0.5/2.5, 0.5/1.5, 0.5/0.5, 1.5/0.5, 2.5/0.5, 3.5/0.5, 4.5/0.5, 5.5/0.5, 6.5/0.5} {
         \fill[agentblue] (\px, \py) circle (0.08);
     }
-    % Obstacles at step 16: [[6, 3], [5, 6], [6, 4], [3, 5], [2, 2]]
-    \drawobs{6}{3}
-    \drawobs{5}{6}
-    \drawobs{6}{4}
+    \drawobs{4}{7}
     \drawobs{3}{5}
-    \drawobs{2}{2}
-    % Agent at (7,7) facing SOUTH (2)
-    \drawagent{7}{7}{2}
-    \drawhud{16 / goal}{FORWARD ($a_2 \to \text{META}$)}{+85.0 (paso: +100.0)}{(0, 0, S, F:0, L:0, R:0, B:0)}
+    \drawobs{3}{2}
+    \drawobs{5}{3}
+    \drawobs{7}{4}
+    \drawagent{7}{7}{1}
+    \drawhud{15 / goal}{FORWARD ($a_2 \to \text{META}$)}{+86.0 (paso: +100.0)}{(7, 7, E)}{goalgreen}
 \end{scope}
 
 \end{tikzpicture}

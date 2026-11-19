@@ -1,4 +1,3 @@
-
 from dataclasses import dataclass
 from typing import Dict, Tuple
 
@@ -25,11 +24,7 @@ ACTION_ROTATE_RIGHT: int = 1
 ACTION_FORWARD: int = 2
 NUM_ACTIONS: int = 3
 
-SENSOR_FREE: int = 0
-SENSOR_OCCUPIED: int = 1
-SENSOR_THREAT: int = 2
-NUM_SENSOR_LEVELS: int = 3
-NUM_PERCEPTION_STATES: int = 8 * 8 * 4 * (NUM_SENSOR_LEVELS ** 3) * 2
+NUM_PERCEPTION_STATES: int = GRID_SIZE * GRID_SIZE * NUM_ORIENTATIONS
 Q_TABLE_ENTRIES: int = NUM_PERCEPTION_STATES * NUM_ACTIONS
 
 REWARD_GOAL: float = 100.0
