@@ -219,8 +219,16 @@ class DynamicGridWorld:
             terminated = True
             event = "goal"
         elif self.simultaneous:
+            prev_obstacles = list(self.obstacles)
             self._move_obstacles()
-            if self.agent_pos in self.obstacles:
+            crossed_head_on = (
+                self.agent_pos != prev_pos
+                and any(
+                    old_o == self.agent_pos and new_o == prev_pos
+                    for old_o, new_o in zip(prev_obstacles, self.obstacles)
+                )
+            )
+            if self.agent_pos in self.obstacles or crossed_head_on:
                 reward = REWARD_COLLISION
                 terminated = True
                 event = "collision"

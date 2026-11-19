@@ -71,11 +71,9 @@ def compute_physics_prior(simultaneous: bool = True) -> List[List[float]]:
                 pen = 0.0
                 if simultaneous:
                     if sf == 1:
-                        pen += 12.0
-                        if sl == 2 and sr == 2:
-                            pen += 15.0
+                        pen += 54.0
                     elif sf == 2:
-                        pen += 60.0
+                        pen += 30.0
                         if sl == 2 and sr == 2:
                             pen += 12.0
                     ffr, ffc = fr + dr, fc + dc
@@ -100,16 +98,16 @@ def compute_physics_prior(simultaneous: bool = True) -> List[List[float]]:
                 pen = 0.0
                 if simultaneous:
                     if adj_count == 1:
-                        pen += 68.0
+                        pen += 40.0
                     elif adj_count == 2:
-                        pen += 96.0
+                        pen += 90.0
                     elif adj_count >= 3:
                         pen += 130.0
                     if (r + ndr, c + ndc) != GOAL_POS:
                         if side_s == 1:
-                            pen += 16.0
+                            pen += 10.0
                         elif side_s == 2:
-                            pen += 4.0
+                            pen += 3.0
                 else:
                     if (r + ndr, c + ndc) != GOAL_POS:
                         if side_s == 1:
@@ -136,7 +134,7 @@ def symmetrize_q_table(agent: QLearningAgent, simultaneous: bool = True) -> None
             p_val = prior[idx][a]
             if v1 + v2 > 0.0:
                 emp_avg = (v1 * q1 + v2 * q2) / (v1 + v2)
-                merged = 0.85 * p_val + 0.15 * emp_avg
+                merged = 0.92 * p_val + 0.08 * emp_avg
             else:
                 merged = p_val
             agent.q_table[idx, a] = merged
